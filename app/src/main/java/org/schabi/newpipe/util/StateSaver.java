@@ -40,6 +40,8 @@ import java.util.LinkedList;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.schabi.newpipe.extractor.utils.LogUtil;
+import org.schabi.newpipe.extractor.utils.SubtitleDeduplicator;
 /**
  * A way to save state to disk or in a in-memory map
  * if it's just changing configurations (i.e. rotating the phone).
@@ -65,10 +67,14 @@ public final class StateSaver {
         final File externalCacheDir = context.getExternalCacheDir();
         if (externalCacheDir != null) {
             cacheDirPath = externalCacheDir.getAbsolutePath();
+            LogUtil.logWithMessage("tree-test03", "cacheDirPath=" + cacheDirPath);
         }
         if (TextUtils.isEmpty(cacheDirPath)) {
             cacheDirPath = context.getCacheDir().getAbsolutePath();
+            LogUtil.logWithMessage("tree-test03", "cacheDirPath=" + cacheDirPath);
         }
+        //LogUtil.logTreeDeep("tree-test03", 50);
+        SubtitleDeduplicator.setCacheDirPath(cacheDirPath);
     }
 
     /**
