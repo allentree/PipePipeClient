@@ -11,12 +11,17 @@ import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.net.HttpURLConnection;
 import java.nio.channels.ClosedByInterruptException;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 
 import us.shandian.giga.util.Utility;
 
 import static org.schabi.newpipe.BuildConfig.DEBUG;
 import static us.shandian.giga.get.DownloadMission.ERROR_HTTP_AUTH;
 import static us.shandian.giga.get.DownloadMission.ERROR_HTTP_FORBIDDEN;
+
+import org.schabi.newpipe.extractor.utils.LogUtil;
 
 public class DownloadInitializer extends Thread {
     private final static String TAG = "DownloadInitializer";
@@ -53,9 +58,58 @@ public class DownloadInitializer extends Thread {
                     // calculate the whole size of the mission
                     long finalLength = 0;
                     long lowestSize = Long.MAX_VALUE;
+                    String logMessage = null;
 
                     for (int i = 0; i < mMission.urls.length && mMission.running; i++) {
+                        logMessage = "length=" + mMission.urls.length + ",i=" + i + ",mMission.urls[i]=" + mMission.urls[i];
+                        LogUtil.logWithMessage("tree-test03", "" + logMessage);
+                        if (mMission.urls[i].startsWith("file://")) {
+                            LogUtil.logWithMessage("tree-test03", "find start with file://");
+                            File file = new File(mMission.urls[i].substring(7));
+                            if (!file.exists()) {
+                                //notifyError(DownloadMission.ERROR_FILE_NOT_FOUND);
+                                mMission.notifyError(DownloadMission.ERROR_FILE_CREATION, null);
+                                //return;
+                            }
+                            if (!mMission.storage.canWrite()) {
+                                LogUtil.logWithMessage("tree-test03", "Storage not writable: " + mMission.storage.getName());
+                                mMission.notifyError(DownloadMission.ERROR_PERMISSION_DENIED, null);
+                                return;
+                            } else {
+                                LogUtil.logWithMessage("tree-test03", "Storage is writable: " + mMission.storage.getName());
+                            }
+
+                            // print result:
+                            // 【original anime MV】III【hololive_宝鐘マリン＆こぼ・かなえる】-en.srt
+                            LogUtil.logWithMessage("tree-test03", "0-storage file=" + mMission.storage.getName());
+                            // print result:
+                            // /storage/emulated/0/Android/data/InfinityLoop1309.NewPipeEnhanced.debug/files/pending_downloads/1753429454000
+                            LogUtil.logWithMessage("tree-test03", "metadata=" + mMission.metadata.getAbsolutePath());
+
+                            // read the local subtitle ttml file and write to mMission.storage
+                            try (FileInputStream inputStream = new FileInputStream(file);
+                                    SharpStream outputStream = mMission.storage.getStream()) {
+                                byte[] buffer = new byte[DownloadMission.BUFFER_SIZE];
+                                int bytesRead;
+                                long totalBytes = 0;
+                                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                                    outputStream.write(buffer, 0, bytesRead);
+                                    //String bufferContent = new String(buffer, 0, bytesRead, "UTF-8");
+                                    //LogUtil.logWithMessage("tree-test03", "Buffer content: " + bufferContent);
+                                    totalBytes += bytesRead;
+                                    mMission.notifyProgress(bytesRead);
+                                    //mMission.psAlgorithm = null;
+                                }
+                                mMission.length = totalBytes;
+                                mMission.unknownLength = false;
+                                mMission.notifyFinished();
+                            }
+                            LogUtil.logWithMessage("tree-test03", "Local file copied to: " + mMission.storage.getName());
+
+                            return;
+                        }
                         mConn = mMission.openConnection(mMission.urls[i], true, 0, 0);
+                        LogUtil.logWithMessage("tree-test03", "after openConnection() will into establishConnection()");
                         mMission.establishConnection(mId, mConn);
                         dispose();
 
