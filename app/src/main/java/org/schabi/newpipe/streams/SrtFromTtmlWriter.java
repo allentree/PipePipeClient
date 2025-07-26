@@ -81,14 +81,8 @@ public class SrtFromTtmlWriter {
         for (final Element paragraph : paragraphList) {
             text.setLength(0);
 
-            for (final Node children : paragraph.childNodes()) {
-                if (children instanceof TextNode) {
-                    text.append(((TextNode) children).text());
-                } else if (children instanceof Element
-                        && ((Element) children).tagName().equalsIgnoreCase("br")) {
-                    text.append(NEW_LINE);
-                }
-            }
+            // Recursively extract text from all child nodes
+            extractText(paragraph, text);
 
             if (ignoreEmptyFrames && text.length() < 1) {
                 continue;
@@ -98,6 +92,20 @@ public class SrtFromTtmlWriter {
             final String end = getTimestamp(paragraph, "end");
 
             writeFrame(begin, end, text);
+        }
+    }
+
+    // Recursive method to extract text from all nodes
+    // for example: extract text from nested <span> tags
+    private void extractText(final Node node, final StringBuilder text) {
+        if (node instanceof TextNode) {
+            text.append(((TextNode) node).text());
+        } else if (node instanceof Element && ((Element) node).tagName().equalsIgnoreCase("br")) {
+            text.append(NEW_LINE);
+        }
+        // Recursively process child nodes
+        for (final Node child : node.childNodes()) {
+            extractText(child, text);
         }
     }
 }
