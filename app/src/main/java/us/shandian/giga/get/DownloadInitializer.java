@@ -61,53 +61,16 @@ public class DownloadInitializer extends Thread {
                     String logMessage = null;
 
                     for (int i = 0; i < mMission.urls.length && mMission.running; i++) {
-                        logMessage = "length=" + mMission.urls.length + ",i=" + i + ",mMission.urls[i]=" + mMission.urls[i];
-                        LogUtil.logWithMessage("tree-test03", "" + logMessage);
-                        if (mMission.urls[i].startsWith("file://")) {
-                            LogUtil.logWithMessage("tree-test03", "find start with file://");
-                            File file = new File(mMission.urls[i].substring(7));
-                            if (!file.exists()) {
-                                //notifyError(DownloadMission.ERROR_FILE_NOT_FOUND);
-                                mMission.notifyError(DownloadMission.ERROR_FILE_CREATION, null);
-                                //return;
-                            }
-                            if (!mMission.storage.canWrite()) {
-                                LogUtil.logWithMessage("tree-test03", "Storage not writable: " + mMission.storage.getName());
-                                mMission.notifyError(DownloadMission.ERROR_PERMISSION_DENIED, null);
-                                return;
-                            } else {
-                                LogUtil.logWithMessage("tree-test03", "Storage is writable: " + mMission.storage.getName());
-                            }
-
-                            // print result:
-                            // 【original anime MV】III【hololive_宝鐘マリン＆こぼ・かなえる】-en.srt
-                            LogUtil.logWithMessage("tree-test03", "0-storage file=" + mMission.storage.getName());
-                            // print result:
-                            // /storage/emulated/0/Android/data/InfinityLoop1309.NewPipeEnhanced.debug/files/pending_downloads/1753429454000
-                            LogUtil.logWithMessage("tree-test03", "metadata=" + mMission.metadata.getAbsolutePath());
-
-                            // read the local subtitle ttml file and write to mMission.storage
-                            try (FileInputStream inputStream = new FileInputStream(file);
-                                    SharpStream outputStream = mMission.storage.getStream()) {
-                                byte[] buffer = new byte[DownloadMission.BUFFER_SIZE];
-                                int bytesRead;
-                                long totalBytes = 0;
-                                while ((bytesRead = inputStream.read(buffer)) != -1) {
-                                    outputStream.write(buffer, 0, bytesRead);
-                                    //String bufferContent = new String(buffer, 0, bytesRead, "UTF-8");
-                                    //LogUtil.logWithMessage("tree-test03", "Buffer content: " + bufferContent);
-                                    totalBytes += bytesRead;
-                                    mMission.notifyProgress(bytesRead);
-                                    //mMission.psAlgorithm = null;
-                                }
-                                mMission.length = totalBytes;
-                                mMission.unknownLength = false;
-                                mMission.notifyFinished();
-                            }
-                            LogUtil.logWithMessage("tree-test03", "Local file copied to: " + mMission.storage.getName());
-
+                        String currentUrl = mMission.urls[i];
+                        if (false == islocalSubtitleUrl(currentUrl)) {
+                            // do nothing
+                        } else {
+                            processLocalSubtitleFile(currentUrl);
+                            // why continue will store the xml content to *.srt ??
+                            //continue;
                             return;
                         }
+
                         mConn = mMission.openConnection(mMission.urls[i], true, 0, 0);
                         LogUtil.logWithMessage("tree-test03", "after openConnection() will into establishConnection()");
                         mMission.establishConnection(mId, mConn);
@@ -260,5 +223,85 @@ public class DownloadInitializer extends Thread {
     public void interrupt() {
         super.interrupt();
         if (mConn != null) dispose();
+    }
+
+    private boolean islocalSubtitleUrl(String url) {
+        String LOCAL_SUBTITLE_URL_PREFIX = "file://";
+
+        if (url.startsWith(LOCAL_SUBTITLE_URL_PREFIX)) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    private String getAbsolutePath(String localSubtitleUrl) {
+        // Remove "file://" prefix
+        String fileNameWithAbsolutePath = localSubtitleUrl.substring(7);
+        return fileNameWithAbsolutePath;
+    }
+
+    private int processLocalSubtitleFile(String localSubtitleUrl) {
+        String localSubtitlePath = getAbsolutePath(localSubtitleUrl);
+        File file = new File(localSubtitlePath);
+
+        if (!file.exists()) {
+            mMission.notifyError(DownloadMission.ERROR_FILE_CREATION, null);
+            return 1;
+        }
+
+        if (!mMission.storage.canWrite()) {
+            mMission.notifyError(DownloadMission.ERROR_PERMISSION_DENIED, null);
+            return 2;
+        }
+
+        extractSubtitleParagraphsToStorage(file);
+
+        return 0; // Successfully
+    }
+
+    private int checkLocalFilePermissions(File file) {
+        if (!file.exists()) {
+            mMission.notifyError(DownloadMission.ERROR_FILE_CREATION, null);
+            return 1;
+        }
+
+        if (!mMission.storage.canWrite()) {
+            mMission.notifyError(DownloadMission.ERROR_PERMISSION_DENIED, null);
+            return 2;
+        }
+
+        return 0;
+    }
+
+    // Extracts subtitle paragraphs from a given (local) file
+    // and writes them to storage.
+    private void extractSubtitleParagraphsToStorage(File file) {
+        try (FileInputStream inputStream = new FileInputStream(file);
+             SharpStream outputStream = mMission.storage.getStream()) {
+
+            byte[] buffer = new byte[DownloadMission.BUFFER_SIZE];
+            int bytesRead;
+            long totalBytes = 0;
+
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+                totalBytes += bytesRead;
+                mMission.notifyProgress(bytesRead);
+            }
+
+            // Update the mission with the total copied file length
+            mMission.length = totalBytes;
+            mMission.unknownLength = false;
+            mMission.notifyFinished();
+
+            LogUtil.logWithMessage("tree-test03", "Local file extracted to: " + mMission.storage.getName());
+
+        } catch (IOException e) {
+            // Handle the exception gracefully by logging and notifying the mission about the error
+            LogUtil.logWithMessage("tree-test03", "Error extracting subtitle paragraphs from file: " + file.getAbsolutePath() + ", error:" + e.getMessage());
+            // Optionally, notify the mission about the specific error
+            mMission.notifyError(DownloadMission.ERROR_FILE_CREATION, e);
+        }
     }
 }
