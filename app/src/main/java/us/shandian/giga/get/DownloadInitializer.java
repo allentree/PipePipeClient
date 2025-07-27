@@ -52,6 +52,22 @@ public class DownloadInitializer extends Thread {
         int retryCount = 0;
         int httpCode = 204;
 
+        //process local, for example: file://
+        for (int i = 0; i < mMission.urls.length && mMission.running; i++) {
+            String currentUrl = mMission.urls[i];
+
+            if (false == isLocalSubtitleUrl(currentUrl)) {
+                // do nothing
+            } else {
+                processLocalSubtitleFile(currentUrl);
+                printLocalSubtitleStoredOk();
+                // There is only urls[0] for subtitle,
+                // so return directly after processing the urls[0].
+                return;
+            }
+        }
+
+        // process remote, for example: http:// or https://
         while (true) {
             try {
                 if (mMission.blocks == null && mMission.current == 0) {
@@ -61,15 +77,6 @@ public class DownloadInitializer extends Thread {
                     String logMessage = null;
 
                     for (int i = 0; i < mMission.urls.length && mMission.running; i++) {
-                        String currentUrl = mMission.urls[i];
-                        if (false == islocalSubtitleUrl(currentUrl)) {
-                            // do nothing
-                        } else {
-                            processLocalSubtitleFile(currentUrl);
-                            // why continue will store the xml content to *.srt ??
-                            //continue;
-                            return;
-                        }
 
                         mConn = mMission.openConnection(mMission.urls[i], true, 0, 0);
                         LogUtil.logWithMessage("tree-test03", "after openConnection() will into establishConnection()");
@@ -225,7 +232,7 @@ public class DownloadInitializer extends Thread {
         if (mConn != null) dispose();
     }
 
-    private boolean islocalSubtitleUrl(String url) {
+    private boolean isLocalUrl(String url) {
         String LOCAL_SUBTITLE_URL_PREFIX = "file://";
 
         if (url.startsWith(LOCAL_SUBTITLE_URL_PREFIX)) {
@@ -233,6 +240,27 @@ public class DownloadInitializer extends Thread {
         } else {
             return false;
         }
+    }
+
+    private boolean isSubtitleUrl() {
+        char downloadKind = mMission.kind;
+        if ('s' != downloadKind) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private boolean isLocalSubtitleUrl(String url) {
+        if (false == isLocalUrl(url)) {
+            return false;
+        }
+
+        if (false == isSubtitleUrl()) {
+            return false;
+        }
+
+        return true;
     }
 
     private String getAbsolutePath(String localSubtitleUrl) {
@@ -295,13 +323,21 @@ public class DownloadInitializer extends Thread {
             mMission.unknownLength = false;
             mMission.notifyFinished();
 
-            LogUtil.logWithMessage("tree-test03", "Local file extracted to: " + mMission.storage.getName());
-
         } catch (IOException e) {
             // Handle the exception gracefully by logging and notifying the mission about the error
             LogUtil.logWithMessage("tree-test03", "Error extracting subtitle paragraphs from file: " + file.getAbsolutePath() + ", error:" + e.getMessage());
             // Optionally, notify the mission about the specific error
             mMission.notifyError(DownloadMission.ERROR_FILE_CREATION, e);
+        }
+    }
+
+    private void printLocalSubtitleStoredOk() {
+        try {
+            String logMessage = "Local subtitle url is extracted to:" +
+                                mMission.storage.getName();
+            Log.i(TAG, logMessage);
+        } catch (NullPointerException e) {
+            Log.w(TAG, "Please check whether the subtitle file is downloaded.", e);
         }
     }
 }
