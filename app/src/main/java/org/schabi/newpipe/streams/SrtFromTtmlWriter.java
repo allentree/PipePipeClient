@@ -96,12 +96,18 @@ public class SrtFromTtmlWriter {
     }
 
     // Recursive method to extract text from all nodes
-    // for example: extract text from nested <span> tags
+    // - This method processes TextNode and <br> tags, recursively
+    //   extracting text from nested tags.
+    // - For example: extract text from nested <span> tags
     private void extractText(final Node node, final StringBuilder text) {
         if (node instanceof TextNode) {
             text.append(((TextNode) node).text());
-        } else if (node instanceof Element && ((Element) node).tagName().equalsIgnoreCase("br")) {
-            text.append(NEW_LINE);
+        } else if (node instanceof Element) {
+            Element element = (Element) node;
+            // <br> is a self-closing HTML tag used to insert a line break.
+            if (element.tagName().equalsIgnoreCase("br")) {
+                text.append(NEW_LINE);  // Add a newline for <br> tags
+            }
         }
         // Recursively process child nodes
         for (final Node child : node.childNodes()) {
