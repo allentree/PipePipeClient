@@ -73,8 +73,8 @@ public final class StateSaver {
             cacheDirPath = context.getCacheDir().getAbsolutePath();
             LogUtil.logWithMessage("tree-test03", "cacheDirPath=" + cacheDirPath);
         }
-        //LogUtil.logTreeDeep("tree-test03", 50);
-        SubtitleDeduplicator.setCacheDirPath(cacheDirPath);
+
+        SubtitleDeduplicator.setCacheDirPathNotDefault(cacheDirPath);
     }
 
     /**
