@@ -36,6 +36,7 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
 import androidx.activity.OnBackPressedCallback
+import androidx.annotation.IdRes
 import androidx.annotation.Nullable
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.content.res.AppCompatResources
@@ -108,6 +109,7 @@ class FeedFragment : BaseStateFragment<FeedState>() {
 
     private var onSettingsChangeListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
     private var updateListViewModeOnResume = false
+    private var updatePullToRefreshOnResume = false
     private var isRefreshing = false
 
     private var lastNewItemsCount = 0
@@ -123,6 +125,7 @@ class FeedFragment : BaseStateFragment<FeedState>() {
     private var originalItems = mutableListOf<StreamItem>()
     private var filteredItems = mutableListOf<StreamItem>()
     private var isFilterEnabled = false
+    private var isPullToRefreshEnabled = true
 
     private val textWatcher = object : TextWatcher {
         override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
@@ -146,17 +149,22 @@ class FeedFragment : BaseStateFragment<FeedState>() {
             ?: FeedGroupEntity.GROUP_ALL_ID
         groupName = arguments?.getString(KEY_GROUP_NAME) ?: ""
 
+        val prefs = PreferenceManager.getDefaultSharedPreferences(requireContext())
+        autoBackgroundPlaying = false
+        randomBackgroundPlaying = prefs.getBoolean(getString(R.string.random_music_play_mode_key), false)
+
         onSettingsChangeListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key != null && key.equals(getString(R.string.list_view_mode_key))) {
-                updateListViewModeOnResume = true
+            when (key) {
+                getString(R.string.list_view_mode_key) -> {
+                    updateListViewModeOnResume = true
+                }
+                getString(R.string.pull_to_refresh_key) -> {
+                    updatePullToRefreshOnResume = true
+                }
             }
         }
         PreferenceManager.getDefaultSharedPreferences(activity)
             .registerOnSharedPreferenceChangeListener(onSettingsChangeListener)
-
-        val prefs = PreferenceManager.getDefaultSharedPreferences(requireContext())
-        autoBackgroundPlaying = prefs.getBoolean(getString(R.string.auto_background_play_key), false)
-        randomBackgroundPlaying = prefs.getBoolean(getString(R.string.random_music_play_mode_key), false)
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
@@ -168,6 +176,7 @@ class FeedFragment : BaseStateFragment<FeedState>() {
         _feedBinding = FragmentFeedBinding.bind(rootView)
         playlistControlBinding = PlaylistControlBinding.bind(feedBinding.playlistControl.root)
         super.onViewCreated(rootView, savedInstanceState)
+        updatePullToRefreshState()
 
         requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -226,6 +235,11 @@ class FeedFragment : BaseStateFragment<FeedState>() {
                 handleResult(viewModel.stateLiveData.value!!)
             }
         }
+
+        if (updatePullToRefreshOnResume) {
+            updatePullToRefreshOnResume = false
+            updatePullToRefreshState()
+        }
     }
 
     private fun setupListViewMode() {
@@ -245,6 +259,35 @@ class FeedFragment : BaseStateFragment<FeedState>() {
             feedBinding.itemsList.scrollToPosition(0)
         }
         setupPlaylistControlListeners()
+        updateSwipeRefreshListener()
+    }
+
+    private fun updatePullToRefreshState() {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(requireContext())
+        isPullToRefreshEnabled = prefs.getBoolean(
+            getString(R.string.pull_to_refresh_key),
+            true
+        )
+
+        // Update the SwipeRefreshLayout state
+        updateSwipeRefreshListener()
+
+        // Optionally disable the visual refresh indicator if disabled
+        if (!isPullToRefreshEnabled) {
+            feedBinding.swipeRefreshLayout.isEnabled = false
+        } else {
+            feedBinding.swipeRefreshLayout.isEnabled = true
+        }
+    }
+
+    private fun updateSwipeRefreshListener() {
+        // Remove existing listener first
+        feedBinding.swipeRefreshLayout.setOnRefreshListener(null)
+
+        // Only add listener if pull-to-refresh is enabled
+        if (isPullToRefreshEnabled) {
+            feedBinding.swipeRefreshLayout.setOnRefreshListener { reloadContent() }
+        }
     }
 
     private fun setupPlaylistControlListeners() {
@@ -315,15 +358,25 @@ class FeedFragment : BaseStateFragment<FeedState>() {
     // Menu
     // /////////////////////////////////////////////////////////////////////////
 
+    private fun Menu.isItemVisible(@IdRes itemId: Int): Boolean =
+        findItem(itemId)?.let { it.isVisible } ?: false
+
     override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
         super.onCreateOptionsMenu(menu, inflater)
 
         activity.supportActionBar?.setDisplayShowTitleEnabled(true)
-        activity.supportActionBar?.setTitle(R.string.fragment_feed_title)
-        activity.supportActionBar?.subtitle = groupName
+        if (groupName == ""){
+            activity.supportActionBar?.setTitle(R.string.fragment_feed_title)
+        } else {
+            activity.supportActionBar?.title = groupName
+        }
+
+//        activity.supportActionBar?.subtitle = groupName
 
         inflater.inflate(R.menu.menu_feed_fragment, menu)
         updateTogglePlayedItemsButton(menu.findItem(R.id.menu_item_feed_toggle_played_items))
+        menu.findItem(R.id.action_search_feed)?.isVisible =
+            menu.isItemVisible(R.id.action_search).not()
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {

@@ -108,6 +108,8 @@
 <string name="volume_gesture_control_summary">Use gestures to control player volume</string>
 <string name="brightness_gesture_control_title">Brightness gesture control</string>
 <string name="brightness_gesture_control_summary">Use gestures to control player brightness</string>
+<string name="swipe_seek_gesture_control_title">Swipe to seek gesture</string>
+<string name="swipe_seek_gesture_control_summary">Swipe right to fast-forward, and left to rewind</string>
 <string name="show_search_suggestions_title">Search suggestions</string>
 <string name="show_search_suggestions_summary">Choose the suggestions to show when searching</string>
 <string name="local_search_suggestions">Local search suggestions</string>
@@ -697,8 +699,6 @@
 \nSo the choice boils down to what you prefer: speed or precise information.</string>
 <string name="feed_toggle_show_played_items">Show watched items</string>
 <string name="feed_toggle_hide_played_items">Hide watched items</string>
-<string name="feed_hide_streams_title">Show the following streams</string>
-<string name="feed_show_hide_streams">Show/Hide streams</string>
 <string name="feed_fetch_channel_tabs">Fetch channel tabs</string>
 <string name="feed_fetch_channel_tabs_summary">Tabs to fetch when updating the feed. This option has no effect if a channel is updated using fast mode.</string>
 <string name="sponsor_block">SponsorBlock</string>
@@ -992,7 +992,7 @@
 <string name="sponsor_promote">Become a supporter</string>
 <string name="random_play_order_title">Random Order</string>
 <string name="random_play_order_summary">Automatically shuffle your local playlists when playing in the background</string>
-<string name="update_log">### New Features\n\n- Update the extractor to avoid most 403 issues (YouTube)\n- Add a separate screen for showing channels of a Channel Group\n- Support setting channel group feed as a main page tab\n- Support keyword search in channel group feeds \n- Support large grid layout\n- Support always use list mode for bookmarks\n- Support display channel group list in Subscription page as a grid\n- Allow limiting the max rows of bullet comments\n- Support playing feeds as playlists\n- Enable vp9 and hevc as default\n- Prefer advanced format when playing \n- Add confirmation dialog before exiting app\n- Improve Image Viewer for Images Attached in Comments (BiliBili)\n\n### Bug Fixes\n\n- All videos are played only on 360p if logged in (YouTube)\n- Thumbnails in Shorts tab are low resolution (YouTube)\n- Cannot download subtitles if downloading from a shared link\n- "no app installed to play this file" under certain conditions\n\n### Behavior\n\n- Make the background button behavior controlled by the "Random Order" Setting</string>
+<string name="update_log">### New Features\n\n- Support clear webview cookies to use different accounts\n\n### Bug Fixes\n\n- Player crash under certain conditions\n- Search in history button disappear in History tab\n- App crash if doing operation on filtered histories\n- Drag speed too high in local playlists\n- Memory leak under certain conditions\n- Cannot submit new SponsorBlock segments(YouTube)\n- Filters not working on Trending page (YouTube)</string>
 <string name="speeding_playback_title">Long-press to speeding the playback</string>
 <string name="view_on_github">View on GitHub</string>
 <string name="donation_dialog_title">Support the Project</string>
@@ -1082,4 +1082,11 @@
 <string name="exit_app_confirmation_message">Show a "press back again to quit" toast to avoid accidental quiting</string>
 <string name="exit_app_confirmation_title">Exit app confirmation</string>
 <string name="try_again">Please try again</string>
+<string name="pull_to_refresh_title">Pull to refresh</string>
+<string name="pull_to_refresh_summary">Enable pull-to-refresh gesture in feed</string>
+<string name="select_groups">Select Groups</string>
+<string name="clear_webview_cookies">Clear WebView cookies</string>
+<string name="clear_webview_cookies_summary">Clear all cookies stored by WebView components so you can use a new account</string>
+<string name="webview_cookies_cleared">WebView cookies have been cleared</string>
+<string name="webview_cookies_clear_failed">Failed to clear WebView cookies</string>
 </resources>

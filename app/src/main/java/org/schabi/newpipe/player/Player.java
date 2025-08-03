@@ -157,6 +157,7 @@ import org.schabi.newpipe.util.external_communication.KoreUtils;
 import org.schabi.newpipe.util.external_communication.ShareUtils;
 import org.schabi.newpipe.views.ExpandableSurfaceView;
 import org.schabi.newpipe.views.player.PlayerFastSeekOverlay;
+import android.widget.TextView;
 
 import java.time.Duration;
 import java.util.*;
@@ -989,6 +990,10 @@ public final class Player implements
         if (DEBUG) {
             Log.d(TAG, "destroy() called");
         }
+        
+        // Close popup menus before destroying to prevent crash
+        closeAllPopupMenus();
+        
         destroyPlayer();
         unregisterBroadcastReceiver();
 
@@ -1349,6 +1354,8 @@ public final class Player implements
                     changePopupSize(popupLayoutParams.width);
                     checkPopupPositionBounds();
                 }
+                // Close popup menus to prevent crash when view is not attached after rotation
+                closeAllPopupMenus();
                 // Close it because when changing orientation from portrait
                 // (in fullscreen mode) the size of queue layout can be larger than the screen size
                 closeItemsList();
@@ -1631,6 +1638,9 @@ public final class Player implements
 
     public void removePopupFromView() {
         if (windowManager != null) {
+            // Close popup menus before removing from view to prevent crash
+            closeAllPopupMenus();
+            
             // wrap in try-catch since it could sometimes generate errors randomly
             try {
                 if (popupHasParent()) {
@@ -4112,6 +4122,19 @@ public final class Player implements
     private void setSelectedIndex(int index) {
         videoResolver.setSelectedIndex(index);
     }
+
+    private void closeAllPopupMenus() {
+        if (qualityPopupMenu != null) {
+            qualityPopupMenu.dismiss();
+        }
+        if (playbackSpeedPopupMenu != null) {
+            playbackSpeedPopupMenu.dismiss();
+        }
+        if (captionPopupMenu != null) {
+            captionPopupMenu.dismiss();
+        }
+        isSomePopupMenuVisible = false;
+    }
     //endregion
 
 
@@ -4237,6 +4260,10 @@ public final class Player implements
             onSleepTimerClicked();
         } else if (v.getId() == binding.fullScreenButton.getId()) {
             setRecovery();
+            if (popupPlayerSelected()) {
+                // Clean up popup properly before switching to main player
+                service.stopService();
+            }
             NavigationHelper.playOnMainPlayer(context, playQueue, true);
             return;
         } else if (v.getId() == binding.screenRotationButton.getId()) {
@@ -4994,6 +5021,10 @@ public final class Player implements
         return binding.currentDisplaySeek;
     }
 
+    public TextView getSwipeSeekDisplay() {
+        return binding.swipeSeekDisplay;
+    }
+
     public PlayerFastSeekOverlay getFastSeekOverlay() {
         return binding.fastSeekOverlay;
     }
@@ -5030,6 +5061,14 @@ public final class Player implements
 
     public PlayerBinding getBinding() {
         return binding;
+    }
+
+    public long getCurrentPosition() {
+        return exoPlayerIsNull() ? 0 : simpleExoPlayer.getCurrentPosition();
+    }
+
+    public long getDuration() {
+        return exoPlayerIsNull() ? 0 : simpleExoPlayer.getDuration();
     }
 
     //endregion
