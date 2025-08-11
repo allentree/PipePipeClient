@@ -21,8 +21,6 @@ import static org.schabi.newpipe.BuildConfig.DEBUG;
 import static us.shandian.giga.get.DownloadMission.ERROR_HTTP_AUTH;
 import static us.shandian.giga.get.DownloadMission.ERROR_HTTP_FORBIDDEN;
 
-import org.schabi.newpipe.extractor.utils.LogUtil;
-
 public class DownloadInitializer extends Thread {
     private final static String TAG = "DownloadInitializer";
     final static int mId = 0;
@@ -74,12 +72,10 @@ public class DownloadInitializer extends Thread {
                     // calculate the whole size of the mission
                     long finalLength = 0;
                     long lowestSize = Long.MAX_VALUE;
-                    String logMessage = null;
 
                     for (int i = 0; i < mMission.urls.length && mMission.running; i++) {
 
                         mConn = mMission.openConnection(mMission.urls[i], true, 0, 0);
-                        LogUtil.logWithMessage("tree-test03", "after openConnection() will into establishConnection()");
                         mMission.establishConnection(mId, mConn);
                         dispose();
 
@@ -302,7 +298,7 @@ public class DownloadInitializer extends Thread {
         return 0;
     }
 
-    // Extracts subtitle paragraphs from a given (local) file
+    // Extracts subtitle paragraphs(content) from a given (local) file
     // and writes them to storage.
     private void extractSubtitleParagraphsToStorage(File file) {
         try (FileInputStream inputStream = new FileInputStream(file);
@@ -324,8 +320,12 @@ public class DownloadInitializer extends Thread {
             mMission.notifyFinished();
 
         } catch (IOException e) {
-            // Handle the exception gracefully by logging and notifying the mission about the error
-            LogUtil.logWithMessage("tree-test03", "Error extracting subtitle paragraphs from file: " + file.getAbsolutePath() + ", error:" + e.getMessage());
+            // Handle the exception gracefully by logging
+            // and notifying the mission about the error.
+            String logMessage = "Error extracting subtitle paragraphs from file: " +
+                                    file.getAbsolutePath() + ", error:" +
+                                    e.getMessage();
+            Log.e(TAG, logMessage);
             // Optionally, notify the mission about the specific error
             mMission.notifyError(DownloadMission.ERROR_FILE_CREATION, e);
         }
