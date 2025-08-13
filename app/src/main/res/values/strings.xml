@@ -912,6 +912,9 @@
 <string name="auto_background_play_summary">Play in background automatically when clicking an item in a local playlist</string>
 <string name="download_all">Download all</string>
 <string name="download_all_message">Please make sure you have selected the download folder and granted access, otherwise download will fail. Existed files will not be overwritten. If audio can not be downloaded separately, the corresponding video will be downloaded.</string>
+<string name="import_urls_from_file">Import URLs from file</string>
+<string name="import_urls_error">Error importing URLs: %s</string>
+<string name="import_urls_no_valid_urls">No valid URLs found in the selected file</string>
 <string name="bullet_comments_opacity_title">Opacity of bullet comments</string>
 <string name="override_cookies_summary">Use manually input cookies instead of saved credentials</string>
 <string name="override_cookies_title">Override cookies</string>
@@ -1089,4 +1092,5 @@
 <string name="clear_webview_cookies_summary">Clear all cookies stored by WebView components so you can use a new account</string>
 <string name="webview_cookies_cleared">WebView cookies have been cleared</string>
 <string name="webview_cookies_clear_failed">Failed to clear WebView cookies</string>
+<string name="remove_from_playlist_confirmation">Remove this item from playlist?</string>
 </resources>

@@ -181,7 +181,7 @@ public class MainActivity extends AppCompatActivity {
         if (prefs.getBoolean(app.getString(R.string.update_app_key), false)) {
             // Start the worker which is checking all conditions
             // and eventually searching for a new version.
-            NewVersionWorker.enqueueNewVersionCheckingWork(app, false);
+                NewVersionWorker.enqueueNewVersionCheckingWork(app, true);
         }
 
         int currentVersionCode = BuildConfig.VERSION_CODE;
@@ -273,7 +273,7 @@ public class MainActivity extends AppCompatActivity {
                 prefs.edit().putBoolean(app.getString(R.string.update_app_key), true).apply();
                 // Start the worker which is checking all conditions
                 // and eventually searching for a new version.
-                NewVersionWorker.enqueueNewVersionCheckingWork(app, false);
+                NewVersionWorker.enqueueNewVersionCheckingWork(app, true);
             });
             builder.setNegativeButton(R.string.no, (dialog, which) -> prefs.edit().putBoolean(app.getString(R.string.update_app_key), false).apply());
             builder.show();
@@ -932,7 +932,8 @@ public class MainActivity extends AppCompatActivity {
                 @Override
                 public void onReceive(final Context context, final Intent intent) {
                     if (Objects.equals(intent.getAction(),
-                            VideoDetailFragment.ACTION_PLAYER_STARTED)) {
+                            VideoDetailFragment.ACTION_PLAYER_STARTED)
+                            && PlayerHolder.getInstance().isPlayerOpen()) {
                         openMiniPlayerIfMissing();
                         // At this point the player is added 100%, we can unregister. Other actions
                         // are useless since the fragment will not be removed after that.

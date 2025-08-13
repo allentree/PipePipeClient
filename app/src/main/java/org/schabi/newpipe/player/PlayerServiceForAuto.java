@@ -23,68 +23,65 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Binder;
+import android.os.Bundle;
 import android.os.IBinder;
+import android.support.v4.media.MediaBrowserCompat;
+import android.support.v4.media.session.MediaSessionCompat;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 
+import androidx.media.MediaBrowserServiceCompat;
+import com.google.android.exoplayer2.ext.mediasession.MediaSessionConnector;
 import org.schabi.newpipe.App;
 import org.schabi.newpipe.databinding.PlayerBinding;
+import org.schabi.newpipe.player.mediabrowser.MediaBrowserImpl;
+import org.schabi.newpipe.player.mediabrowser.MediaBrowserPlaybackPreparer;
+import org.schabi.newpipe.player.mediasession.PlayerServiceInterface;
 import org.schabi.newpipe.util.DeviceUtils;
 import org.schabi.newpipe.util.ThemeHelper;
 
+import java.util.List;
+
+import static org.schabi.newpipe.player.PlayerService.BIND_PLAYER_HOLDER_ACTION;
 import static org.schabi.newpipe.util.Localization.assureCorrectAppLanguage;
 
 
 /**
- * One service for all players.
+ * One service for all players with Android Auto support.
  *
  * @author mauriciocolli
  */
-public final class MainPlayer extends Service {
-    private static final String TAG = "MainPlayer";
+public final class PlayerServiceForAuto extends MediaBrowserServiceCompat implements PlayerServiceInterface {
+    private static final String TAG = "PlayerServiceForAuto";
     private static final boolean DEBUG = Player.DEBUG;
+
+    // These objects are used to cleanly separate the Service implementation (in this file) and the
+    // media browser and playback preparer implementations. At the moment the playback preparer is
+    // only used in conjunction with the media browser.
+    private MediaBrowserImpl mediaBrowserImpl;
+    private MediaBrowserPlaybackPreparer mediaBrowserPlaybackPreparer;
+
+    // these are instantiated in onCreate() as per
+    // https://developer.android.com/training/cars/media#browser_workflow
+    private MediaSessionCompat mediaSession;
+    private MediaSessionConnector sessionConnector;
 
     private Player player;
     private WindowManager windowManager;
 
-    private final IBinder mBinder = new MainPlayer.LocalBinder();
+    private final IBinder mBinder = new PlayerServiceForAuto.LocalBinder();
 
-    public enum PlayerType {
-        VIDEO,
-        AUDIO,
-        POPUP
+    @Override
+    public Service getInstance() {
+        return this;
     }
-
-    /*//////////////////////////////////////////////////////////////////////////
-    // Notification
-    //////////////////////////////////////////////////////////////////////////*/
-
-    public static final String ACTION_CLOSE
-            = App.PACKAGE_NAME + ".player.MainPlayer.CLOSE";
-    public static final String ACTION_PLAY_PAUSE
-            = App.PACKAGE_NAME + ".player.MainPlayer.PLAY_PAUSE";
-    static final String ACTION_REPEAT
-            = App.PACKAGE_NAME + ".player.MainPlayer.REPEAT";
-    static final String ACTION_PLAY_NEXT
-            = App.PACKAGE_NAME + ".player.MainPlayer.ACTION_PLAY_NEXT";
-    static final String ACTION_PLAY_PREVIOUS
-            = App.PACKAGE_NAME + ".player.MainPlayer.ACTION_PLAY_PREVIOUS";
-    static final String ACTION_FAST_REWIND
-            = App.PACKAGE_NAME + ".player.MainPlayer.ACTION_FAST_REWIND";
-    static final String ACTION_FAST_FORWARD
-            = App.PACKAGE_NAME + ".player.MainPlayer.ACTION_FAST_FORWARD";
-    public static final String ACTION_SHUFFLE
-            = App.PACKAGE_NAME + ".player.MainPlayer.ACTION_SHUFFLE";
-    public static final String ACTION_CHANGE_PLAY_MODE
-            = App.PACKAGE_NAME + ".player.MainPlayer.ACTION_CHANGE_PLAY_MODE";
-    public static final String ACTION_RECREATE_NOTIFICATION
-            = App.PACKAGE_NAME + ".player.MainPlayer.ACTION_RECREATE_NOTIFICATION";
 
     /*//////////////////////////////////////////////////////////////////////////
     // Service's LifeCycle
@@ -92,6 +89,7 @@ public final class MainPlayer extends Service {
 
     @Override
     public void onCreate() {
+        super.onCreate();
         if (DEBUG) {
             Log.d(TAG, "onCreate() called");
         }
@@ -100,6 +98,25 @@ public final class MainPlayer extends Service {
 
         ThemeHelper.setTheme(this);
         createView();
+        mediaBrowserImpl = new MediaBrowserImpl(this, this::notifyChildrenChanged);
+
+        // see https://developer.android.com/training/cars/media#browser_workflow
+        mediaSession = new MediaSessionCompat(this, "MediaSessionPlayerServ");
+        setSessionToken(mediaSession.getSessionToken());
+        sessionConnector = new MediaSessionConnector(mediaSession);
+        sessionConnector.setMetadataDeduplicationEnabled(true);
+
+        mediaBrowserPlaybackPreparer = new MediaBrowserPlaybackPreparer(
+                this,
+                sessionConnector::setCustomErrorMessage,
+                () -> sessionConnector.setCustomErrorMessage(null),
+                (playWhenReady) -> {
+                    if (player != null) {
+                        player.onPrepare();
+                    }
+                }
+        );
+        sessionConnector.setPlaybackPreparer(mediaBrowserPlaybackPreparer);
     }
 
     private void createView() {
@@ -124,7 +141,10 @@ public final class MainPlayer extends Service {
         }
         // null check
         if (player == null) {
+            final PlayerBinding binding = PlayerBinding.inflate(LayoutInflater.from(this));
+
             player = new Player(this);
+            player.setupFromView(binding);
         }
 
         if (Intent.ACTION_MEDIA_BUTTON.equals(intent.getAction())
@@ -180,7 +200,13 @@ public final class MainPlayer extends Service {
         if (DEBUG) {
             Log.d(TAG, "destroy() called");
         }
+        super.onDestroy();
+
         cleanup();
+
+        mediaBrowserPlaybackPreparer.dispose();
+        mediaSession.release();
+        mediaBrowserImpl.dispose();
     }
 
     private void cleanup() {
@@ -198,6 +224,11 @@ public final class MainPlayer extends Service {
             player.destroy();
 
             player = null;
+            mediaSession.setActive(false);
+
+            // Should already be handled by NotificationUtil.cancelNotificationAndStopForeground() in
+            // NotificationPlayerUi, but let's make sure that the foreground service is stopped.
+//            ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE);
         }
     }
 
@@ -214,14 +245,27 @@ public final class MainPlayer extends Service {
 
     @Override
     public IBinder onBind(final Intent intent) {
-        return mBinder;
+        if (BIND_PLAYER_HOLDER_ACTION.equals(intent.getAction())) {
+            // Note that this binder might be reused multiple times while the service is alive, even
+            // after unbind() has been called: https://stackoverflow.com/a/8794930 .
+            return mBinder;
+
+        } else if (MediaBrowserServiceCompat.SERVICE_INTERFACE.equals(intent.getAction())) {
+            // MediaBrowserService also uses its own binder, so for actions related to the media
+            // browser service, pass the onBind to the superclass.
+            return super.onBind(intent);
+
+        } else {
+            // This is an unknown request, avoid returning any binder to not leak objects.
+            return null;
+        }
     }
 
     /*//////////////////////////////////////////////////////////////////////////
     // Utils
     //////////////////////////////////////////////////////////////////////////*/
 
-    boolean isLandscape() {
+    public boolean isLandscape() {
         // DisplayMetrics from activity context knows about MultiWindow feature
         // while DisplayMetrics from app context doesn't
         return DeviceUtils.isLandscape(player != null && player.getParentActivity() != null
@@ -250,15 +294,65 @@ public final class MainPlayer extends Service {
         }
     }
 
+    /**
+     * @return the current active player instance. May be null, since the player service can outlive
+     * the player e.g. to respond to Android Auto media browser queries.
+     */
+    @Nullable
+    public Player getPlayer() {
+        return player;
+    }
 
-    public class LocalBinder extends Binder {
+    /**
+     * @return the media session for Android Auto compatibility
+     */
+    @NonNull
+    public MediaSessionCompat getMediaSession() {
+        return mediaSession;
+    }
 
-        public MainPlayer getService() {
-            return MainPlayer.this;
+    /**
+     * @return the media browser playback preparer for Android Auto compatibility
+     */
+    @NonNull
+    public MediaBrowserPlaybackPreparer getMediaBrowserPlaybackPreparer() {
+        return mediaBrowserPlaybackPreparer;
+    }
+
+    //endregion
+
+    //region Media browser
+    @Override
+    public BrowserRoot onGetRoot(@NonNull final String clientPackageName,
+                                 final int clientUid,
+                                 @Nullable final Bundle rootHints) {
+        // TODO check if the accessing package has permission to view data
+        return mediaBrowserImpl.onGetRoot(clientPackageName, clientUid, rootHints);
+    }
+
+    @Override
+    public void onLoadChildren(@NonNull final String parentId,
+                               @NonNull final Result<List<MediaBrowserCompat.MediaItem>> result) {
+        mediaBrowserImpl.onLoadChildren(parentId, result);
+    }
+
+    @Override
+    public void onSearch(@NonNull final String query,
+                         final Bundle extras,
+                         @NonNull final Result<List<MediaBrowserCompat.MediaItem>> result) {
+        mediaBrowserImpl.onSearch(query, result);
+    }
+    //endregion
+
+
+    public class LocalBinder extends Binder implements PlayerBinderInterface {
+
+        public PlayerServiceForAuto getService() {
+            return PlayerServiceForAuto.this;
         }
 
         public Player getPlayer() {
-            return MainPlayer.this.player;
+            return PlayerServiceForAuto.this.player;
         }
     }
 }

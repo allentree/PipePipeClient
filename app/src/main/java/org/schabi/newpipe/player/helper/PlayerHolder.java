@@ -16,11 +16,14 @@ import com.google.android.exoplayer2.PlaybackParameters;
 import org.schabi.newpipe.App;
 import org.schabi.newpipe.MainActivity;
 import org.schabi.newpipe.extractor.stream.StreamInfo;
-import org.schabi.newpipe.player.MainPlayer;
+import org.schabi.newpipe.player.PlayerBinderInterface;
+import org.schabi.newpipe.player.PlayerService;
 import org.schabi.newpipe.player.Player;
 import org.schabi.newpipe.player.event.PlayerServiceEventListener;
 import org.schabi.newpipe.player.event.PlayerServiceExtendedEventListener;
+import org.schabi.newpipe.player.mediasession.PlayerServiceInterface;
 import org.schabi.newpipe.player.playqueue.PlayQueue;
+import org.schabi.newpipe.util.DeviceUtils;
 
 public final class PlayerHolder {
 
@@ -42,17 +45,17 @@ public final class PlayerHolder {
 
     private final PlayerServiceConnection serviceConnection = new PlayerServiceConnection();
     private boolean bound;
-    @Nullable private MainPlayer playerService;
+    @Nullable private PlayerServiceInterface playerService;
     @Nullable private Player player;
 
     /**
-     * Returns the current {@link MainPlayer.PlayerType} of the {@link MainPlayer} service,
+     * Returns the current {@link PlayerService.PlayerType} of the {@link PlayerService} service,
      * otherwise `null` if no service running.
      *
      * @return Current PlayerType
      */
     @Nullable
-    public MainPlayer.PlayerType getType() {
+    public PlayerService.PlayerType getType() {
         if (player == null) {
             return null;
         }
@@ -127,7 +130,7 @@ public final class PlayerHolder {
         // and NullPointerExceptions inside the service because the service will be
         // bound twice. Prevent it with unbinding first
         unbind(context);
-        ContextCompat.startForegroundService(context, new Intent(context, MainPlayer.class));
+        ContextCompat.startForegroundService(context, new Intent(context, DeviceUtils.getPlayerServiceClass()));
         serviceConnection.doPlayAfterConnect(playAfterConnect);
         bind(context);
     }
@@ -135,7 +138,7 @@ public final class PlayerHolder {
     public void stopService() {
         final Context context = getCommonContext();
         unbind(context);
-        context.stopService(new Intent(context, MainPlayer.class));
+        context.stopService(new Intent(context, DeviceUtils.getPlayerServiceClass()));
     }
 
     class PlayerServiceConnection implements ServiceConnection {
@@ -161,7 +164,7 @@ public final class PlayerHolder {
             if (DEBUG) {
                 Log.d(TAG, "Player service is connected");
             }
-            final MainPlayer.LocalBinder localBinder = (MainPlayer.LocalBinder) service;
+            final PlayerBinderInterface localBinder = (PlayerBinderInterface) service;
 
             playerService = localBinder.getService();
             player = localBinder.getPlayer();
@@ -177,11 +180,19 @@ public final class PlayerHolder {
             Log.d(TAG, "bind() called");
         }
 
-        final Intent serviceIntent = new Intent(context, MainPlayer.class);
-        bound = context.bindService(serviceIntent, serviceConnection,
-                Context.BIND_AUTO_CREATE);
-        if (!bound) {
-            context.unbindService(serviceConnection);
+        final Intent serviceIntent = new Intent(context, DeviceUtils.getPlayerServiceClass());
+        serviceIntent.setAction(PlayerService.BIND_PLAYER_HOLDER_ACTION);
+        try {
+            bound = context.bindService(serviceIntent, serviceConnection,
+                    Context.BIND_AUTO_CREATE);
+            if (!bound) {
+                Log.e(TAG, "bindService returned false for PlayerHolder connection.");
+                // 不要在这里调用 unbindService!
+                // 可以考虑做一些错误处理，比如通知 Listener 绑定失败
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Exception during bindService for PlayerHolder", e);
+            bound = false; // 确保在异常时 bound 状态正确
         }
     }
 
@@ -191,7 +202,11 @@ public final class PlayerHolder {
         }
 
         if (bound) {
-            context.unbindService(serviceConnection);
+            try {
+                context.unbindService(serviceConnection);
+            } catch (Exception ignore){
+
+            }
             bound = false;
             stopPlayerListener();
             playerService = null;
