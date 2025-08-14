@@ -20,6 +20,7 @@ import us.shandian.giga.util.Utility;
 import static org.schabi.newpipe.BuildConfig.DEBUG;
 import static us.shandian.giga.get.DownloadMission.ERROR_HTTP_AUTH;
 import static us.shandian.giga.get.DownloadMission.ERROR_HTTP_FORBIDDEN;
+import org.schabi.newpipe.extractor.utils.SubtitleDeduplicator;
 
 public class DownloadInitializer extends Thread {
     private final static String TAG = "DownloadInitializer";
@@ -57,8 +58,13 @@ public class DownloadInitializer extends Thread {
             if (false == isLocalSubtitleUrl(currentUrl)) {
                 // do nothing
             } else {
-                processLocalSubtitleFile(currentUrl);
-                printLocalSubtitleStoredOk();
+                int result = handleLocalSubtitle(currentUrl);
+                if (0 == result) {
+                    printLocalSubtitleStoredOk();
+                } else {
+                    Log.e(TAG, "Fail to handle localSubtitle Url. error=" + result);
+                }
+
                 // There is only urls[0] for subtitle,
                 // so return directly after processing the urls[0].
                 return;
@@ -229,9 +235,9 @@ public class DownloadInitializer extends Thread {
     }
 
     private boolean isLocalUrl(String url) {
-        String LOCAL_SUBTITLE_URL_PREFIX = "file://";
+        String URL_PREFIX = SubtitleDeduplicator.LOCAL_SUBTITLE_URL_PREFIX;
 
-        if (url.startsWith(LOCAL_SUBTITLE_URL_PREFIX)) {
+        if (url.startsWith(URL_PREFIX)) {
             return true;
         } else {
             return false;
@@ -259,29 +265,40 @@ public class DownloadInitializer extends Thread {
         return true;
     }
 
-    private String getAbsolutePath(String localSubtitleUrl) {
-        // Remove "file://" prefix
-        String fileNameWithAbsolutePath = localSubtitleUrl.substring(7);
-        return fileNameWithAbsolutePath;
+    private String getAbsolutePathFromLocalUrl(String localSubtitleUrl) {
+        String URL_PREFIX = SubtitleDeduplicator.LOCAL_SUBTITLE_URL_PREFIX;
+        int prefixLength = URL_PREFIX.length();
+        // Remove URL_PREFIX
+        String absolutePath = localSubtitleUrl.substring(prefixLength);
+        return absolutePath;
     }
 
-    private int processLocalSubtitleFile(String localSubtitleUrl) {
-        String localSubtitlePath = getAbsolutePath(localSubtitleUrl);
+    private int handleLocalSubtitle(String localSubtitleUrl) {
+        if (false == isValidLocalUrlLength(localSubtitleUrl)) {
+            return 3;
+        }
+
+        String localSubtitlePath = getAbsolutePathFromLocalUrl(localSubtitleUrl);
         File file = new File(localSubtitlePath);
 
-        if (!file.exists()) {
-            mMission.notifyError(DownloadMission.ERROR_FILE_CREATION, null);
-            return 1;
+        int permissionResult = checkLocalFilePermissions(file);
+        if (permissionResult != 0) {
+            return permissionResult;
         }
 
-        if (!mMission.storage.canWrite()) {
-            mMission.notifyError(DownloadMission.ERROR_PERMISSION_DENIED, null);
-            return 2;
-        }
-
-        extractSubtitleParagraphsToStorage(file);
+        extractSubtitleToStorage(file);
 
         return 0; // Successfully
+    }
+
+    private boolean isValidLocalUrlLength(String localUrl) {
+        String URL_PREFIX = SubtitleDeduplicator.LOCAL_SUBTITLE_URL_PREFIX;
+
+        if (localUrl.length() <= URL_PREFIX.length()) {
+             return false;
+        }
+
+        return true;
     }
 
     private int checkLocalFilePermissions(File file) {
@@ -298,9 +315,9 @@ public class DownloadInitializer extends Thread {
         return 0;
     }
 
-    // Extracts subtitle paragraphs(content) from a given (local) file
+    // Extracts subtitle paragraphs(content) from a given local file
     // and writes them to storage.
-    private void extractSubtitleParagraphsToStorage(File file) {
+    private void extractSubtitleToStorage(File file) {
         try (FileInputStream inputStream = new FileInputStream(file);
              SharpStream outputStream = mMission.storage.getStream()) {
 
@@ -314,19 +331,15 @@ public class DownloadInitializer extends Thread {
                 mMission.notifyProgress(bytesRead);
             }
 
-            // Update the mission with the total copied file length
             mMission.length = totalBytes;
             mMission.unknownLength = false;
             mMission.notifyFinished();
 
         } catch (IOException e) {
-            // Handle the exception gracefully by logging
-            // and notifying the mission about the error.
-            String logMessage = "Error extracting subtitle paragraphs from file: " +
+            String logMessage = "Error extracting subtitle paragraphs from " +
                                     file.getAbsolutePath() + ", error:" +
                                     e.getMessage();
             Log.e(TAG, logMessage);
-            // Optionally, notify the mission about the specific error
             mMission.notifyError(DownloadMission.ERROR_FILE_CREATION, e);
         }
     }
